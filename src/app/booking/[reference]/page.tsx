@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 export default function Payment({ params }: { params: Promise<{ reference: string }> }) {
+  return <Suspense fallback={<main style={{ minHeight: "100vh", background: "#0a4b4a", color: "white", display: "grid", placeItems: "center" }}>Loading payment…</main>}><PaymentContent params={params} /></Suspense>;
+}
+
+function PaymentContent({ params }: { params: Promise<{ reference: string }> }) {
   const [seconds, setSeconds] = useState(900);
   const [reference, setReference] = useState("");
   const [error, setError] = useState("");
