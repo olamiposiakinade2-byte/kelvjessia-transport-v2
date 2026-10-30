@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum UserRole { ADMIN STAFF DRIVER }
+enum BookingStatus { PENDING_PAYMENT CONFIRMED EXPIRED CANCELLED COMPLETED }
+enum PaymentStatus { PENDING PROCESSING SUCCESSFUL FAILED EXPIRED REFUNDED REVIEW }
+enum TripStatus { SCHEDULED BOARDING DEPARTED IN_TRANSIT COMPLETED CANCELLED }
+enum EnquiryStatus { NEW IN_PROGRESS AWAITING_CUSTOMER RESOLVED CLOSED }
+enum EnquiryCategory { GENERAL BOOKING_ASSISTANCE PAYMENT_ISSUE PICKUP_INFORMATION DROP_OFF_INFORMATION REFUND_REQUEST COMPLAINT }
+enum EventType { PICKED_UP DROPPED_OFF }
+model User {
+ id String @id @default(cuid())
+ email String @unique
+ name String
+ passwordHash String
+ role UserRole
+ sessions Session[]
+ driver Driver?
+ assignedEnquiries Enquiry[] @relation("AssignedEnquiries")
+ auditLogs AuditLog[]
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+}
+model Session { id String @id @default(cuid()) tokenHash String @unique userId String user User @relation(fields:[userId],references:[id],onDelete:Cascade) expiresAt DateTime createdAt DateTime @default(now()) @@index([userId,expiresAt]) }
+model Customer { id String @id @default(cuid()) fullName String email String @unique phone String bookings Booking[] enquiries Enquiry[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Route { id String @id @default(cuid()) origin String destination String durationMinutes Int active Boolean @default(true) trips Trip[] @@unique([origin,destination]) @@index([origin,destination]) }
+model Vehicle { id String @id @default(cuid()) registrationNumber String @unique name String seatCapacity Int active Boolean @default(true) trips Trip[] }
+model Driver { id String @id @default(cuid()) userId String @unique user User @relation(fields:[userId],references:[id],onDelete:Cascade) phone String trips Trip[] }
+model PickupLocation { id String @id @default(cuid()) name String address String active Boolean @default(true) tripPickups TripPickup[] bookings Booking[] }
+model Trip { id String @id @default(cuid()) routeId String route Route @relation(fields:[routeId],references:[id]) vehicleId String? vehicle Vehicle? @relation(fields:[vehicleId],references:[id]) driverId String? driver Driver? @relation(fields:[driverId],references:[id]) departureAt DateTime priceKobo Int status TripStatus @default(SCHEDULED) seats Seat[] pickups TripPickup[] bookings Booking[] createdAt DateTime @default(now()) @@index([routeId,departureAt]) @@index([driverId,status]) }
+model TripPickup { id String @id @default(cuid()) tripId String trip Trip @relation(fields:[tripId],references:[id],onDelete:Cascade) pickupLocationId String pickupLocation PickupLocation @relation(fields:[pickupLocationId],references:[id]) pickupAt DateTime estimatedDropoffAt DateTime @@unique([tripId,pickupLocationId]) }
+model Seat { id String @id @default(cuid()) tripId String trip Trip @relation(fields:[tripId],references:[id],onDelete:Cascade) number String bookingSeats BookingSeat[] @@unique([tripId,number]) }
+model Booking { id String @id @default(cuid()) reference String @unique customerId String customer Customer @relation(fields:[customerId],references:[id]) tripId String trip Trip @relation(fields:[tripId],references:[id]) pickupLocationId String pickupLocation PickupLocation @relation(fields:[pickupLocationId],references:[id]) status BookingStatus @default(PENDING_PAYMENT) expiresAt DateTime? totalKobo Int passengers Passenger[] seats BookingSeat[] payment Payment? events PickupDropoffEvent[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt @@index([tripId,status,expiresAt]) @@index([customerId,createdAt]) }
+model BookingSeat { id String @id @default(cuid()) bookingId String booking Booking @relation(fields:[bookingId],references:[id],onDelete:Cascade) seatId String seat Seat @relation(fields:[seatId],references:[id]) @@unique([bookingId,seatId]) @@unique([seatId]) }
+model Passenger { id String @id @default(cuid()) bookingId String booking Booking @relation(fields:[bookingId],references:[id],onDelete:Cascade) fullName String isPrimary Boolean @default(false) }
+model Payment { id String @id @default(cuid()) bookingId String @unique booking Booking @relation(fields:[bookingId],references:[id]) reference String @unique amountKobo Int currency String @default("NGN") status PaymentStatus @default(PENDING) provider String @default("paystack") providerId String? @unique verifiedAt DateTime? events PaymentEvent[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt @@index([status,createdAt]) }
+model PaymentEvent { id String @id @default(cuid()) paymentId String? payment Payment? @relation(fields:[paymentId],references:[id]) providerEventId String @unique eventType String payload Json createdAt DateTime @default(now()) }
+model Enquiry { id String @id @default(cuid()) reference String @unique customerId String? customer Customer? @relation(fields:[customerId],references:[id]) fullName String email String phone String? category EnquiryCategory subject String message String status EnquiryStatus @default(NEW) assignedToId String? assignedTo User? @relation("AssignedEnquiries",fields:[assignedToId],references:[id]) replies EnquiryReply[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt @@index([status,category,createdAt]) @@index([email,createdAt]) }
+model EnquiryReply { id String @id @default(cuid()) enquiryId String enquiry Enquiry @relation(fields:[enquiryId],references:[id],onDelete:Cascade) body String internal Boolean @default(false) authorId String createdAt DateTime @default(now()) }
+model PickupDropoffEvent { id String @id @default(cuid()) bookingId String booking Booking @relation(fields:[bookingId],references:[id],onDelete:Cascade) type EventType occurredAt DateTime recordedBy String correctionOfId String? note String? createdAt DateTime @default(now()) @@index([bookingId,type,occurredAt]) }
+model AuditLog { id String @id @default(cuid()) actorId String? actor User? @relation(fields:[actorId],references:[id]) action String entityType String entityId String before Json? after Json? createdAt DateTime @default(now()) @@index([entityType,entityId,createdAt]) }
+model SystemSetting { key String @id value Json updatedAt DateTime @updatedAt }
