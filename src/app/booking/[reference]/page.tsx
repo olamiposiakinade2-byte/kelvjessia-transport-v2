@@ -10,6 +10,7 @@ export default function Payment({ params }: { params: Promise<{ reference: strin
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [paymentState, setPaymentState] = useState<"" | "verifying" | "confirmed" | "review">("");
+  const [savedForLater, setSavedForLater] = useState(false);
   const searchParams = useSearchParams();
   const paymentReference = searchParams.get("reference");
 
@@ -68,6 +69,21 @@ export default function Payment({ params }: { params: Promise<{ reference: strin
     }
   }
 
+  async function payLater() {
+    setError("");
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/payments/pay-later", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bookingReference: reference }) });
+      const body = await response.json();
+      if (!response.ok) { setError(body.error || "Unable to save this payment for later."); return; }
+      setSavedForLater(true);
+    } catch {
+      setError("Unable to save this payment for later. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main style={{ minHeight: "100vh", background: "#0a4b4a", display: "grid", placeItems: "center", padding: 20 }}>
       <section className="card" style={{ padding: 32, maxWidth: 520, width: "100%" }}>
@@ -84,12 +100,12 @@ export default function Payment({ params }: { params: Promise<{ reference: strin
           <div style={{ background: "#fff2cc", borderRadius: 14, padding: 18 }}><b>Payment received for review</b><p style={{ marginBottom: 0 }}>Our team will confirm this booking shortly.</p></div>
         ) : paymentState === "verifying" ? (
           <p>Verifying your Paystack payment…</p>
+        ) : savedForLater ? (
+          <div style={{ background: "#fff2cc", borderRadius: 14, padding: 18 }}><b>Saved for later</b><p style={{ marginBottom: 0 }}>Your seats are held for 24 hours. An administrator can send you an email or SMS reminder.</p></div>
         ) : <>
         {error && <p role="alert" style={{ color: "#a52a2a", marginBottom: 14 }}>{error}</p>}
         {seconds > 0 ? (
-          <button className="button dark" style={{ width: "100%" }} onClick={pay} disabled={!reference || submitting}>
-            {submitting ? "Opening Paystack…" : "Pay with Paystack (test)"}
-          </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><button className="button dark" onClick={pay} disabled={!reference || submitting}>{submitting ? "Please wait…" : "Pay now"}</button><button className="button" onClick={payLater} disabled={!reference || submitting}>{submitting ? "Please wait…" : "Pay later"}</button></div>
         ) : (
           <>
             <p>Reservation expired. Please choose a new trip.</p>

@@ -28,6 +28,15 @@ enum PaymentStatus {
   REFUNDED
   REVIEW
 }
+enum ReminderChannel {
+  EMAIL
+  SMS
+}
+enum ReminderStatus {
+  QUEUED
+  SENT
+  FAILED
+}
 enum TripStatus {
   SCHEDULED
   BOARDING
@@ -217,8 +226,21 @@ model Payment {
   providerId String? @unique
   verifiedAt DateTime?
   events PaymentEvent[]
+  reminders PaymentReminder[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PaymentReminder {
+  id String @id @default(cuid())
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  channel ReminderChannel
+  status ReminderStatus @default(QUEUED)
+  providerMessage String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([paymentId, createdAt])
 }
 
 model PaymentEvent {
