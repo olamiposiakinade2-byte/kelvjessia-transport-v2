@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "set \"NEXT_TEST_WASM_DIR=node_modules\\@next\\swc-wasm-nodejs\" && next dev --webpack",
     "build": "next build",
     "start": "next start",
