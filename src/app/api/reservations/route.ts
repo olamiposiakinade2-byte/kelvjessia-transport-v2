@@ -9,6 +9,13 @@ export async function POST(request: NextRequest) {
   const data = parsed.data; const expiresAt = new Date(Date.now() + 15 * 60_000);
   try {
     const booking = await prisma.$transaction(async (tx) => {
+      const expiredBookings = await tx.booking.findMany({ where: { status: "PENDING_PAYMENT", expiresAt: { lt: new Date() } }, select: { id: true } });
+      const expiredIds = expiredBookings.map(({ id }) => id);
+      if (expiredIds.length) {
+        await tx.bookingSeat.deleteMany({ where: { bookingId: { in: expiredIds } } });
+        await tx.payment.updateMany({ where: { bookingId: { in: expiredIds }, status: { in: ["PENDING", "PROCESSING"] } }, data: { status: "EXPIRED" } });
+        await tx.booking.updateMany({ where: { id: { in: expiredIds } }, data: { status: "EXPIRED" } });
+      }
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Seat" WHERE "id" IN (${Prisma.join(data.seatIds)}) FOR UPDATE`);
       const seats = await tx.seat.findMany({ where: { id: { in: data.seatIds }, tripId: data.tripId }, include: { bookingSeats: true } });
       if (seats.length !== data.seatIds.length || seats.some((seat) => seat.bookingSeats.length)) throw new Error("One or more selected seats are no longer available.");
