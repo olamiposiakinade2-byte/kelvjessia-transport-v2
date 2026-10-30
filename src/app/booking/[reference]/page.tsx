@@ -2,18 +2,46 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function Payment({ params }: { params: Promise<{ reference: string }> }) {
   const [seconds, setSeconds] = useState(900);
   const [reference, setReference] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [paymentState, setPaymentState] = useState<"" | "verifying" | "confirmed" | "review">("");
+  const searchParams = useSearchParams();
+  const paymentReference = searchParams.get("reference");
 
   useEffect(() => {
     params.then(({ reference: value }) => setReference(value));
     const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [params]);
+
+  useEffect(() => {
+    if (!paymentReference?.startsWith("PAY-")) return;
+    let active = true;
+    setPaymentState("verifying");
+    fetch(`/api/payments/verify/${encodeURIComponent(paymentReference)}`, { method: "POST" })
+      .then(async (response) => ({ response, body: await response.json() }))
+      .then(({ response, body }) => {
+        if (!active) return;
+        if (!response.ok) {
+          setPaymentState("");
+          setError(body.error || "We could not verify your payment yet.");
+          return;
+        }
+        setPaymentState(body.status === "confirmed" ? "confirmed" : "review");
+      })
+      .catch(() => {
+        if (active) {
+          setPaymentState("");
+          setError("We could not verify your payment yet. Please try again shortly.");
+        }
+      });
+    return () => { active = false; };
+  }, [paymentReference]);
 
   const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
   const remainingSeconds = String(seconds % 60).padStart(2, "0");
@@ -50,6 +78,13 @@ export default function Payment({ params }: { params: Promise<{ reference: strin
           <b style={{ fontSize: 25 }}>{minutes}:{remainingSeconds}</b>
           <p style={{ margin: "5px 0 0", fontSize: 13 }}>Complete your payment within this time to secure your booking.</p>
         </div>
+        {paymentState === "confirmed" ? (
+          <div style={{ background: "#e7f4d4", borderRadius: 14, padding: 18 }}><b>Payment confirmed</b><p style={{ marginBottom: 0 }}>Your booking is confirmed. KelvJessia Transport will contact you with your trip details.</p></div>
+        ) : paymentState === "review" ? (
+          <div style={{ background: "#fff2cc", borderRadius: 14, padding: 18 }}><b>Payment received for review</b><p style={{ marginBottom: 0 }}>Our team will confirm this booking shortly.</p></div>
+        ) : paymentState === "verifying" ? (
+          <p>Verifying your Paystack payment…</p>
+        ) : <>
         {error && <p role="alert" style={{ color: "#a52a2a", marginBottom: 14 }}>{error}</p>}
         {seconds > 0 ? (
           <button className="button dark" style={{ width: "100%" }} onClick={pay} disabled={!reference || submitting}>
@@ -61,6 +96,7 @@ export default function Payment({ params }: { params: Promise<{ reference: strin
             <Link className="button dark" href="/trips">Find a new trip</Link>
           </>
         )}
+        </>}
         <p style={{ fontSize: 12, color: "#6d7d79", marginTop: 18 }}>Payments are verified on the server. Card details are never stored by KelvJessia Transport.</p>
       </section>
     </main>
